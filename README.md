@@ -1,3 +1,5 @@
+  <img align="right" src="https://visitor-badge.laobi.icu/badge?page_id=LeoTiTo.DuduApp" />
+
 # DuduApp
 
 Application mobile de dons accessibles à tous, développée avec React Native et Expo, intégrant des fonctionnalités avancées d'accessibilité et une gestion cloud via Firebase.
