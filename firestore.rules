@@ -1,0 +1,88 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Fonction pour vérifier si un utilisateur est administrateur
+    function isAdmin() {
+      return request.auth != null && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    
+    // Fonction pour vérifier si un utilisateur est administrateur d'une association spécifique
+    function isAdminOfAssociation(associationId) {
+      return request.auth != null && 
+             exists(/databases/$(database)/documents/admins/$(request.auth.uid)) && 
+             get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.associationId == associationId;
+    }
+    
+    // Règle pour les utilisateurs : un utilisateur ne peut accéder qu'à son propre document
+    match /users/{userId} {
+      allow read, update, delete: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null;
+    }
+    
+    // Règle pour les dons : un utilisateur peut voir, modifier ou supprimer ses propres dons
+    // Un administrateur peut consulter les dons de son association
+    match /donations/{donationId} {
+      // Lecture publique pour les statistiques et les objectifs
+      allow read: if true;
+      
+      // Utilisateur normal - accès à ses propres dons
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+      
+      // Permettre la création de dons à TOUS les utilisateurs, même non authentifiés
+      allow create: if true;
+      
+      // Accès administrateur - lecture des dons de leur association
+      allow read: if request.auth != null && 
+                  isAdminOfAssociation(resource.data.association.id);
+    }
+    
+    // Règle pour les admins - gestion des accès administrateurs
+    match /admins/{adminId} {
+      // Un administrateur peut lire son propre document
+      allow read: if request.auth != null && request.auth.uid == adminId;
+      
+      // Un administrateur peut lire les autres documents administrateurs
+      // de la même association
+      allow read: if request.auth != null && 
+                 isAdmin() && 
+                 get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.associationId == 
+                 get(/databases/$(database)/documents/admins/$(adminId)).data.associationId;
+      
+      // La création, mise à jour et suppression d'administrateurs ne peut pas se faire
+      // directement depuis le client, elle doit passer par les scripts Admin SDK
+      allow create, update, delete: if false;
+    }
+    
+    // Règle pour les associations - accessibles par tous en lecture seule
+    match /associations/{associationId} {
+      allow read: if true; // Lecture publique
+      allow create, update, delete: if false; // Modifications uniquement via Admin SDK
+    }
+    
+    // Règle pour les objectifs de dons (goals)
+    match /goals/{goalId} {
+      // Lecture publique pour tous les objectifs
+      allow read: if true;
+      
+      // Création d'un nouvel objectif - l'administrateur doit être lié à l'association
+      allow create: if request.auth != null && 
+                     isAdminOfAssociation(request.resource.data.associationId);
+      
+      // Mise à jour d'un objectif existant - vérifier que l'admin est lié à l'association
+      // OU qu'il s'agit d'une mise à jour de complétion d'objectif via un don
+      allow update: if request.auth != null && (
+                     isAdminOfAssociation(resource.data.associationId) || 
+                     (
+                       // Permet aux utilisateurs authentifiés de mettre à jour uniquement les champs liés à la complétion
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['completed', 'completedAt', 'completedBy']) &&
+                       request.resource.data.completed == true &&
+                       request.resource.data.completedBy == request.auth.uid
+                     )
+                   );
+      
+      // Suppression d'un objectif - l'admin doit être lié à l'association concernée
+      allow delete: if request.auth != null && 
+                     isAdminOfAssociation(resource.data.associationId);
+    }
+  }
+} 

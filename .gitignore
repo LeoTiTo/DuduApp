@@ -1,0 +1,26 @@
+# Config Firebase
+config/
+config/serviceAccountKey.json
+
+node_modules/
+.expo/
+dist/
+npm-debug.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
+
+# macOS
+.DS_Store
+
+# Temporary files created by Metro to check the health of the file watcher
+.metro-health-check*
+
+# Client-side Firebase keys (not to be exposed publicly)
+firebase/config.js
+firebase/config.local.js
+firebase/config.*.js 
